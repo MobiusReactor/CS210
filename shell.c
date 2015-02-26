@@ -15,7 +15,8 @@ char** getCommand() {
 	// Get input
 	// fgets returns null if ctrl-D is pressed, so return exit if so
 	if (fgets(str, sizeof(str), stdin) == NULL){
-		strcpy(output[0], "exit");
+		printf("Quitting... \n");
+		exit(0);
 	}
 
 	// If last character in string is not \n, input was too long, so extra 
@@ -54,7 +55,7 @@ int main(int argc, char *argv[]) {
 	while(strcmp((tokens = getCommand())[0], "exit") != 0) {
 		int n = 0;
 		while(tokens[n] != NULL){
-			printf("Command entered: %s\n", tokens[n]); // Just a test to see if it's working okay
+			printf("Command entered: '%s'\n", tokens[n]); // Just a test to see if it's working okay
 			n++;
 		}
 	}
