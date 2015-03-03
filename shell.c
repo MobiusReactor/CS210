@@ -34,7 +34,7 @@ char** getCommand() {
 	// Also malloc some stuff onto the first entry 
 	
 	int i = 0;
-	char* input = strtok(str, " ");
+	char* input = strtok(str, " |><&;");
 	output[0] = malloc(MAX_CMD_LEN); // bit hacky, to stop the while loop not finding something at index 0 and crashing spectacularly
 	strcpy(output[0], "");
 	
