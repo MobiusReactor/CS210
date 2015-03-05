@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <errno.h>
 
 #define MAX_CMD_LEN 512
 #define MAX_CMD_SIZE 10
@@ -51,12 +55,28 @@ char** getCommand() {
 int main(int argc, char *argv[]) {
 	char** tokens; // Array of string tokens, command is first entry
 	
-	
 	while(strcmp((tokens = getCommand())[0], "exit") != 0) {
 		int n = 0;
 		while(tokens[n] != NULL){
 			printf("Command entered: '%s'\n", tokens[n]); // Just a test to see if it's working okay
 			n++;
+		}
+		
+		pid_t pid = fork();
+		
+		if (pid < 0) {
+			printf("Error creating child process\n");
+			exit(-1);
+			
+		} else if (pid == 0) {
+			int status = execvp(tokens[0], tokens);
+			if (status < 0) {
+				printf("Error executing program\n");
+			}
+			exit(0);
+			
+		} else if (pid > 0) {
+			wait(NULL);
 		}
 	}
 	
