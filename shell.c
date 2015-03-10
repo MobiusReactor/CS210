@@ -7,20 +7,31 @@
 #include <errno.h>
 
 #define MAX_CMD_LEN 512
-#define MAX_CMD_SIZE 10
+#define MAX_CMD_TOKENS 50
 
-char** getCommand() {
-	static char str[MAX_CMD_LEN];
-	static char* output[MAX_CMD_SIZE];
+char** getTokens(char* str) {
+	static char* tokens[MAX_CMD_TOKENS];
+	int i = 0;
 	
-	memset(output, 0, MAX_CMD_SIZE); // Reset array, since it's static it'd normally retain values between commands
+	// Get first token
+	tokens[i] = strtok(str, " |><&;");
+	
+	// Loop until token is null or max no. of tokens is reached
+	while(tokens[i] != NULL && i < (MAX_CMD_TOKENS - 1)) {
+		tokens[++i] = strtok(NULL, " |><&;");
+	};
+	
+	return tokens;
+}
+
+char* getString() {
+	static char str[MAX_CMD_LEN];
 	printf("> ");
 	
 	// Get input
 	// fgets returns null if ctrl-D is pressed, so return exit if so
 	if (fgets(str, sizeof(str), stdin) == NULL){
-		printf("Quitting... \n");
-		exit(0);
+		return "exit";
 	}
 
 	// If last character in string is not \n, input was too long, so extra 
@@ -33,51 +44,47 @@ char** getCommand() {
 	// Remove newline
 	str[strlen(str) - 1] = '\0';
 	
-	// Iterate through the string using strtok to split into whitespace seperated tokens
-	// If there's a better way to do this feel free to tear it up
-	// Also malloc some stuff onto the first entry 
+	return str;
+}
+
+void runExternalCommand(char *tokens[]){
+	// Create child process
+	pid_t pid = fork();
 	
-	int i = 0;
-	char* input = strtok(str, " |><&;");
-	output[0] = malloc(MAX_CMD_LEN); // bit hacky, to stop the while loop not finding something at index 0 and crashing spectacularly
-	strcpy(output[0], "");
+	// pid < 0 means error occured creating child process
+	if (pid < 0) {
+		printf("Error creating child process\n");
+		exit(-1);
+		
+	// pid == 0 means process is child, so run command
+	} else if (pid == 0) {
+		if ((execvp(tokens[0], tokens)) < 0) {
+			printf("Error executing program\n");
+		}
+		exit(0);
 	
-	while(input){
-		output[i] = malloc(MAX_CMD_LEN); // Allocating space to a new array entry
-		strcpy(output[i], input); // Copying the next input into the array
-		input = strtok(NULL, " "); // Getting next input
-		i++;
-	};
-	
-	return output;
+	// pid > 0 means process is parent, so wait for child to finish
+	} else if (pid > 0) {
+		wait(NULL);
+	}
 }
 
 int main(int argc, char *argv[]) {
-	char** tokens; // Array of string tokens, command is first entry
+	char* input; // String before parsing into tokens
+	char** cmd;  // Array of string tokens, cmd[0] is the command
 	
-	while(strcmp((tokens = getCommand())[0], "exit") != 0) {
+	while(strcmp((input = getString()), "exit") != 0) {
+		cmd = getTokens(input);
+		
+		// Print list of tokens, to ensure everything works
 		int n = 0;
-		while(tokens[n] != NULL){
-			printf("Command entered: '%s'\n", tokens[n]); // Just a test to see if it's working okay
+		while(cmd[n] != NULL){
+			printf("Command token %d: '%s'\n", n, cmd[n]);
 			n++;
 		}
 		
-		pid_t pid = fork();
-		
-		if (pid < 0) {
-			printf("Error creating child process\n");
-			exit(-1);
-			
-		} else if (pid == 0) {
-			int status = execvp(tokens[0], tokens);
-			if (status < 0) {
-				printf("Error executing program\n");
-			}
-			exit(0);
-			
-		} else if (pid > 0) {
-			wait(NULL);
-		}
+		// Calls a helper function to run an external command
+		runExternalCommand(cmd);
 	}
 	
 	printf("Quitting...\n");
