@@ -147,7 +147,6 @@ int main(int argc, char *argv[]) {
 	char** cmd;  // Array of tokens, cmd[0] is command, cmd[1...n] are args
     int i;  // Counter for the command map searcher
     int n; // COunter for the token printer
-    int found = 0; // Simple var to check if found command or not
 
 	// Backup PATH
 	char* path = getenv("PATH");
@@ -178,18 +177,12 @@ int main(int argc, char *argv[]) {
 
 			// Search the command map for the index of the entered command
 			i = 0;
-			found = 0;
-
-			while (i < NUM_CMDS){
-				if(strcmp(commandMap[i].name, cmd[0]) == 0){
-                    found = 1;
-                    break;
-				}
-                i++;
+			while (i < NUM_CMDS && strcmp(commandMap[i].name, cmd[0]) != 0){
+				i++;
 			}
-
+			
 			// If i < NUM_CMDS, internal cmd found, otherwise, run external cmd
-			if (found == 1){
+			if (i < NUM_CMDS){
 				(*commandMap[i].function)(cmd);
 			} else {
 				runExternalCommand(cmd);
