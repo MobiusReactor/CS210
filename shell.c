@@ -9,7 +9,8 @@
 #define MAX_CMD_LEN 512
 #define MAX_CMD_TOKENS 50
 #define MAX_PATH_LEN 512
-#define NUM_CMDS 2
+#define NUM_CMDS 3
+
 
 
 // Built-in command functions
@@ -35,6 +36,29 @@ void setpathFn(char *cmd[]) {
 	}
 }
 
+void changedirFn(char *cmd[]) {
+	int retcode;
+	char* curpath;
+	
+    if (cmd[2] != NULL){
+		fprintf(stderr, "Error: Unexpected parameter - ""%s""\n", cmd[2]);
+	} else {
+	    curpath = getenv("HOME");
+	    
+	    if(cmd[1] != NULL){
+	        curpath = cmd[1];
+	    }
+		
+		retcode = chdir(curpath);
+		
+		if(retcode == 0){
+		    printf("Setting path to %s\n", curpath);
+		} else {
+		    fprintf(stderr, "Error: Unknown path - ""%s""\n", curpath);
+		}
+	}
+}
+
 
 // Array mapping names to function pointers for above functions
 typedef struct {
@@ -44,7 +68,8 @@ typedef struct {
 
 cmd_map_t commandMap [] = {
 	{"getpath", &getpathFn},
-	{"setpath", &setpathFn}
+	{"setpath", &setpathFn},
+	{"cd", &changedirFn}
 };
 
 
