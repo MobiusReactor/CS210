@@ -10,7 +10,15 @@
 #define MAX_CMD_LEN 512
 #define MAX_CMD_TOKENS 50
 #define MAX_PATH_LEN 512
-#define NUM_CMDS 3
+#define NUM_CMDS 4
+#define HISTORY_LENGTH 20
+
+
+// Global history array
+
+char* historyMap[HISTORY_LENGTH][MAX_CMD_TOKENS];
+
+
 
 
 // Helper function for consistent error reporting
@@ -79,6 +87,29 @@ void changedirFn(char *cmd[]) {
 }
 
 
+void printHistory(char *cmd[]) {
+	if (cmd[1] != NULL) {
+		fprintf(stderr, "Error: Unexpected parameter - ""%s""\n", cmd[1]);
+
+	} else {
+		int i;
+		int p;
+		
+		for(i = 0; i < (HISTORY_LENGTH); i++){
+			
+			if(historyMap[i][0] != NULL){
+				printf("%d: ", (i+1));
+				for(p = 0; (historyMap[i][p] != NULL && p < MAX_CMD_TOKENS); p++){
+					printf("%s ", historyMap[i][p]);
+				}
+				printf("\n");
+			}
+			
+		}
+	}
+}
+
+
 // Array mapping names to function pointers for above functions
 typedef struct {
 	char *name;
@@ -88,8 +119,15 @@ typedef struct {
 cmd_map_t commandMap [] = {
 	{"getpath", &getpathFn},
 	{"setpath", &setpathFn},
-	{"cd", &changedirFn}
+	{"cd", &changedirFn},
+	{"history", &printHistory}
 };
+
+int curHistV; // monitor to keep track of the last inserted history element
+void insertHistory(char *cmd[]){
+		memcpy(historyMap[curHistV], cmd, sizeof(cmd));
+		curHistV++;
+}
 
 char* getString() {
 	static char str[MAX_CMD_LEN];
@@ -154,6 +192,59 @@ void runExternalCommand(char *cmd[]){
 	}
 }
 
+void pickCommand(char *cmd[]){
+	int i;  // Counter for the command map searcher
+    int n; // COunter for the token printer
+
+	// Print list of tokens, to ensure everything works
+	n = 0;
+	while(cmd[n] != NULL){
+		printf("Command token %d: '%s'\n", n, cmd[n]);
+		n++;
+	}
+
+	// Search the command map for the index of the entered command
+	i = 0;
+	while (i < NUM_CMDS && strcmp(commandMap[i].name, cmd[0]) != 0){
+		i++;
+	}
+	
+	// If i < NUM_CMDS, internal cmd found, otherwise, run external cmd
+	if (i < NUM_CMDS){
+		(*commandMap[i].function)(cmd);
+	} else {
+		runExternalCommand(cmd);
+	}
+}
+
+
+void processHistory(char *cmd[]){
+	int chosenH; // Variable to hold the chosen history val
+	int i; // Validation iterator
+	
+	// Strip the !- from the history command if exists
+
+	if(cmd[0][1] == '-'){
+		memmove(cmd[0], cmd[0]+2, strlen(cmd[0]));
+	} else { // Otherwise just strip the !
+		memmove(cmd[0], cmd[0]+1, strlen(cmd[0]));
+	}
+
+	// Validate if numerical
+
+	for(i = 0; i < strlen(cmd[0]); i++){
+		if(!isdigit(cmd[0][i])){
+			fprintf(stderr, "Error: Not a number - ""%s""\n", cmd[0]);
+			return;
+		}
+	}
+	
+	chosenH = atoi(cmd[0]);
+	
+	printf("Chosen history value: %d", chosenH);
+
+}
+
 int main(int argc, char *argv[]) {
 	char* input; // String before parsing into tokens
 	char** cmd;  // Array of tokens, cmd[0] is command, cmd[1...n] are args
@@ -169,7 +260,7 @@ int main(int argc, char *argv[]) {
 
 	printf("Stored PATH: %s\n\n", path);
 	printf("Current Working Directory: %s\n\n", cwd);
-
+	curHistV = 0; // Initialise the history counter
 
 	// Loop until getString() returns "exit"
 	while(strcmp((input = getString()), "exit") != 0) {
@@ -177,25 +268,13 @@ int main(int argc, char *argv[]) {
 
 		// Check if command is blank
 		if (cmd[0] != NULL){
-
-			// Print list of tokens, to ensure everything works
-			int n = 0;
-			while(cmd[n] != NULL){
-                printf("Command token %d: '%s'\n", n, cmd[n]);
-                n++;
-            }
-
-			// Search the command map for the index of the entered command
-			int i = 0;
-			while (i < NUM_CMDS && strcmp(commandMap[i].name, cmd[0]) != 0){
-				i++;
-			}
 			
-			// If i < NUM_CMDS, internal cmd found, otherwise, run external cmd
-			if (i < NUM_CMDS){
-				(*commandMap[i].function)(cmd);
+			// Check if it's a history command
+			if(strcspn(cmd[0], "!") < strlen(cmd[0])){
+				processHistory(cmd);
 			} else {
-				runExternalCommand(cmd);
+				insertHistory(cmd);
+				pickCommand(cmd);
 			}
 		}
 	}
