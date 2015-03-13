@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <stdbool.h>
 
 #define MAX_CMD_LEN 512
 #define MAX_CMD_TOKENS 50
@@ -12,12 +13,20 @@
 #define NUM_CMDS 3
 
 
-
+// Helper function for consistent error reporting
+void printError(char* err, char* src, bool sysErr) {
+	if (sysErr) {
+		fprintf(stderr, "%s - \"%s\": %s\n", err, src, strerror(errno));
+		
+	} else {
+		fprintf(stderr, "%s - \"%s\"\n", err, src);
+	}
+}
 
 // Built-in command functions
 void getpathFn(char *cmd[]) {
 	if (cmd[1] != NULL) {
-		fprintf(stderr, "Error: Unexpected parameter - ""%s""\n", cmd[1]);
+		printError("Error: Unexpected parameter", cmd[1], false);
 
 	} else {
 		printf("PATH: %s\n", getenv("PATH"));
@@ -26,39 +35,47 @@ void getpathFn(char *cmd[]) {
 
 void setpathFn(char *cmd[]) {
 	if (cmd[2] != NULL){
-		fprintf(stderr, "Error: Unexpected parameter - ""%s""\n", cmd[2]);
-
+		printError("Error: Unexpected parameter", cmd[2], false);
+		
 	} else if (cmd[1] != NULL) {
-		printf("Setting path to %s\n", cmd[1]);
-		setenv("PATH", cmd[1], 1);
+		// If setenv returns 0, success
+		if (setenv("PATH", cmd[1], 1) == 0) {
+			printf("Path set to %s\n", cmd[1]);
+			
+		// Otherwise, print error
+		} else {
+			printError("Error setting path", cmd[1], true);
+		}
 
 	} else {
-		fprintf(stderr, "Error: Parameter expected\n");
+		printError("Error: Parameter expected", "<path>", false);
 	}
 }
 
 void changedirFn(char *cmd[]) {
-	int retcode;
-	char* curpath;
-
-    if (cmd[2] != NULL){
-		fprintf(stderr, "Error: Unexpected parameter - ""%s""\n", cmd[2]);
+    if (cmd[2] != NULL) {
+		printError("Error: Unexpected parameter", cmd[2], false);
+		
 	} else {
-	    curpath = getenv("HOME");
-
-	    if(cmd[1] != NULL){
-	        curpath = cmd[1];
-	    }
-
-
-		retcode = chdir(curpath);
-
-		if(retcode == 0){
-		    printf("Setting path to %s\n", curpath);
-		} else {
-		    fprintf(stderr, "Error: Unknown path - ""%s""\n", curpath);
+		char* dir = getenv("HOME");
+		
+		// if cmd[1] is present, use as new dir, else, use HOME as default
+		if(cmd[1] != NULL) {
+			dir = cmd[1];
 		}
-    }
+		
+		// If chdir returns 0, success
+		if(chdir(dir) == 0){
+			char cwd[MAX_PATH_LEN];
+			getcwd(cwd, MAX_PATH_LEN);
+			
+		    printf("Working directory: %s\n", cwd);
+		
+		// Otherwise, print error
+		} else {
+			printError("Error changing to dir", dir, true);
+		}
+	}
 }
 
 
@@ -73,7 +90,6 @@ cmd_map_t commandMap [] = {
 	{"setpath", &setpathFn},
 	{"cd", &changedirFn}
 };
-
 
 char* getString() {
 	static char str[MAX_CMD_LEN];
@@ -116,23 +132,19 @@ char** getTokens(char* str) {
 	return tokens;
 }
 
-void printError(char* err, char* src) {
-	fprintf(stderr, "%s - \"%s\": %s\n", err, src, strerror(errno));
-}
-
 void runExternalCommand(char *cmd[]){
 	// Create child process
 	pid_t pid = fork();
 
 	// pid < 0 means error occured creating child process
 	if (pid < 0) {
-		printError("Error creating child process", cmd[0]);
+		printError("Error creating child process", cmd[0], true);
 		exit(-1);
 
 	// pid == 0 means process is child, so run command
 	} else if (pid == 0) {
 		if ((execvp(cmd[0], cmd)) < 0) {
-			printError("Error executing program", cmd[0]);
+			printError("Error executing program", cmd[0], true);
 		}
 		exit(0);
 
@@ -145,8 +157,6 @@ void runExternalCommand(char *cmd[]){
 int main(int argc, char *argv[]) {
 	char* input; // String before parsing into tokens
 	char** cmd;  // Array of tokens, cmd[0] is command, cmd[1...n] are args
-    int i;  // Counter for the command map searcher
-    int n; // COunter for the token printer
 
 	// Backup PATH
 	char* path = getenv("PATH");
@@ -169,14 +179,14 @@ int main(int argc, char *argv[]) {
 		if (cmd[0] != NULL){
 
 			// Print list of tokens, to ensure everything works
-			n = 0;
+			int n = 0;
 			while(cmd[n] != NULL){
                 printf("Command token %d: '%s'\n", n, cmd[n]);
                 n++;
             }
 
 			// Search the command map for the index of the entered command
-			i = 0;
+			int i = 0;
 			while (i < NUM_CMDS && strcmp(commandMap[i].name, cmd[0]) != 0){
 				i++;
 			}
