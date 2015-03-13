@@ -124,9 +124,12 @@ cmd_map_t commandMap [] = {
 };
 
 int curHistV; // monitor to keep track of the last inserted history element
+
 void insertHistory(char *cmd[]){
-		memcpy(historyMap[curHistV], cmd, sizeof(cmd));
-		curHistV++;
+
+	memmove(historyMap[curHistV], cmd, sizeof(cmd));
+	
+	curHistV++;
 }
 
 char* getString() {
