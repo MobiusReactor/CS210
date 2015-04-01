@@ -86,10 +86,9 @@ void changedirFn(char *cmd[]) {
 	}
 }
 
-
 void printHistory(char *cmd[]) {
 	if (cmd[1] != NULL) {
-		fprintf(stderr, "Error: Unexpected parameter - ""%s""\n", cmd[1]);
+		printError("Error: Unexpected parameter", cmd[1], false);
 
 	} else {
 		int i;
