@@ -19,6 +19,10 @@
 static char historyMap[HISTORY_LENGTH][MAX_CMD_LEN];
 static int historyCounter = 0;
 
+// Other globals and statics
+
+static char* historyPath;
+static const char* HIST_FILE = "/.hist_list";
 
 
 
@@ -246,6 +250,58 @@ char* getHistory(char *cmd){
 	return NULL;
 }
 
+
+
+void storeHistory(){
+	// Original home directory is stored in homeDir
+
+	FILE *storeHist = fopen(historyPath, "w");
+
+	if(storeHist == NULL)
+		return;
+
+	int i;
+	for (i = 0; i < HISTORY_LENGTH; i++){
+		//fputs(strcat(historyMap[i], "\n"), storeHist);	
+		fprintf(storeHist, "%s\n", historyMap[i]);
+	}
+
+	fclose(storeHist);
+	
+}
+
+void loadHistory(){
+
+	char lineBuffer[MAX_CMD_LEN];
+
+	FILE *loadHist = fopen(historyPath, "r");
+	
+	if(loadHist == NULL)
+		return;
+		
+	int i;
+	for (i = 0; i < HISTORY_LENGTH; i++){
+		
+		// Load current line into temporary buffer
+		fgets(lineBuffer, MAX_CMD_LEN, (FILE*) loadHist);
+
+		if(strcmp(lineBuffer, "\n") != 0){ // If not newline, there's a command there
+
+			// Strip the newline for insertion into array
+			lineBuffer[strlen(lineBuffer)-1] = '\0';
+			
+			addHistory(lineBuffer);
+
+		}
+
+	}
+
+	fclose(loadHist);
+
+
+}
+
+
 int main(int argc, char *argv[]) {
 	char* input; // String before parsing into tokens
 
@@ -260,6 +316,12 @@ int main(int argc, char *argv[]) {
 
 	printf("Stored PATH: %s\n\n", path);
 	printf("Current Working Directory: %s\n\n", cwd);
+
+	// Load history from memory if exists
+	
+	historyPath = strcat(getenv("HOME"), HIST_FILE);	
+
+	loadHistory();	
 
 	// Loop until getString() returns "exit"
 	while(strcmp((input = getString()), "exit") != 0) {
@@ -281,6 +343,10 @@ int main(int argc, char *argv[]) {
 			}
 		}
 	}
+
+	// Store history to disk
+
+	storeHistory();
 
 	// Restore the PATH variable
 	setenv("PATH", path, 1);
