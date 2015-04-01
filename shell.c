@@ -207,8 +207,6 @@ void runCommand(char *input){
 	}
 }
 
-int curHistV; // monitor to keep track of the last inserted history element
-
 void addHistory(char *cmd){
 	if (historyCounter < HISTORY_LENGTH){
 		strcpy(historyMap[historyCounter], cmd);
