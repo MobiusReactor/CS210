@@ -16,7 +16,8 @@
 
 // Global history array
 
-char* historyMap[HISTORY_LENGTH][MAX_CMD_TOKENS];
+static char historyMap[HISTORY_LENGTH][MAX_CMD_LEN];
+static int historyCounter = 0;
 
 
 
@@ -86,25 +87,16 @@ void changedirFn(char *cmd[]) {
 	}
 }
 
-
 void printHistory(char *cmd[]) {
 	if (cmd[1] != NULL) {
-		fprintf(stderr, "Error: Unexpected parameter - ""%s""\n", cmd[1]);
+		printError("Error: Unexpected parameter", cmd[1], false);
 
 	} else {
 		int i;
-		int p;
-		
 		for(i = 0; i < (HISTORY_LENGTH); i++){
-			
-			if(historyMap[i][0] != NULL){
-				printf("%d: ", (i+1));
-				for(p = 0; (historyMap[i][p] != NULL && p < MAX_CMD_TOKENS); p++){
-					printf("%s ", historyMap[i][p]);
-				}
-				printf("\n");
+			if(historyMap[i][0] != 0){
+				printf("%d: %s\n", (i + 1), historyMap[i]);
 			}
-			
 		}
 	}
 }
@@ -122,15 +114,6 @@ cmd_map_t commandMap [] = {
 	{"cd", &changedirFn},
 	{"history", &printHistory}
 };
-
-int curHistV; // monitor to keep track of the last inserted history element
-
-void insertHistory(char *cmd[]){
-
-	memmove(historyMap[curHistV], cmd, sizeof(cmd));
-	
-	curHistV++;
-}
 
 char* getString() {
 	static char str[MAX_CMD_LEN];
@@ -195,9 +178,13 @@ void runExternalCommand(char *cmd[]){
 	}
 }
 
-void pickCommand(char *cmd[]){
-	int i;  // Counter for the command map searcher
-    int n; // COunter for the token printer
+void runCommand(char *input){
+	char** cmd;
+	
+	int i; // Counter for the command map searcher
+    int n; // C0unter for the token printer
+	
+	cmd = getTokens(input);
 
 	// Print list of tokens, to ensure everything works
 	n = 0;
@@ -220,37 +207,49 @@ void pickCommand(char *cmd[]){
 	}
 }
 
+int curHistV; // monitor to keep track of the last inserted history element
 
-void processHistory(char *cmd[]){
-	int chosenH; // Variable to hold the chosen history val
-	int i; // Validation iterator
-	
-	// Strip the !- from the history command if exists
+void addHistory(char *cmd){
+	if (historyCounter < HISTORY_LENGTH){
+		strcpy(historyMap[historyCounter], cmd);
+		historyCounter++;
 
-	if(cmd[0][1] == '-'){
-		memmove(cmd[0], cmd[0]+2, strlen(cmd[0]));
-	} else { // Otherwise just strip the !
-		memmove(cmd[0], cmd[0]+1, strlen(cmd[0]));
-	}
-
-	// Validate if numerical
-
-	for(i = 0; i < strlen(cmd[0]); i++){
-		if(!isdigit(cmd[0][i])){
-			fprintf(stderr, "Error: Not a number - ""%s""\n", cmd[0]);
-			return;
+	} else {
+		int i;
+		for (i = 0; i < HISTORY_LENGTH; i++){
+			strcpy(historyMap[i], historyMap[i + 1]);	
 		}
+		
+		strcpy(historyMap[19], cmd);
+	}
+}
+
+char* getHistory(char *cmd){
+	// Strip "!" from command
+	cmd++;
+	
+	// Convert to int
+	int index = atoi(cmd);
+	
+	// Handle any errors
+	if (index == 0) {
+		fprintf(stderr, "Error: invalid input after '!'\n");
+	} else if (index > historyCounter || index < (0 - historyCounter)) {
+		fprintf(stderr, "Error: number out of range\n");
+
+	// Otherwise, return appropriate value
+	} else if (index > 0 && index <= historyCounter) {
+		return historyMap[index - 1];
+	} else if (index < 0 && index > (0 - historyCounter - 1)) {
+		return historyMap[historyCounter + index];
 	}
 	
-	chosenH = atoi(cmd[0]);
-	
-	printf("Chosen history value: %d", chosenH);
-
+	// Return null if error occurred
+	return NULL;
 }
 
 int main(int argc, char *argv[]) {
 	char* input; // String before parsing into tokens
-	char** cmd;  // Array of tokens, cmd[0] is command, cmd[1...n] are args
 
 	// Backup PATH
 	char* path = getenv("PATH");
@@ -263,21 +262,24 @@ int main(int argc, char *argv[]) {
 
 	printf("Stored PATH: %s\n\n", path);
 	printf("Current Working Directory: %s\n\n", cwd);
-	curHistV = 0; // Initialise the history counter
 
 	// Loop until getString() returns "exit"
 	while(strcmp((input = getString()), "exit") != 0) {
-		cmd = getTokens(input);
-
+		
 		// Check if command is blank
-		if (cmd[0] != NULL){
+		if (input[0] != 0){
 			
 			// Check if it's a history command
-			if(strcspn(cmd[0], "!") < strlen(cmd[0])){
-				processHistory(cmd);
+			if(input[0] == '!'){
+				input = getHistory(input);
+				
+				if (input != NULL) {
+					printf("<Running command from history - \"%s\">\n", input);
+					runCommand(input);
+				}
 			} else {
-				insertHistory(cmd);
-				pickCommand(cmd);
+				addHistory(input);
+				runCommand(input);
 			}
 		}
 	}
