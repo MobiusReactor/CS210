@@ -40,8 +40,9 @@ void printError(char* err, char* src, bool sysErr) {
 
 void printAliasList() {
 	int i = 0;
-	for(i = 0; i < (ALIAS_LEN); i++){
-		if(strlen(aliasMap[i].name) != 0){
+	for(i = 0; i < (aliasCounter); i++){
+		// if(strlen(aliasMap[i].name) != 0){
+		if(aliasMap[i].name[0] != 0){
 			printf("%s: %s\n", aliasMap[i].name, aliasMap[i].cmd);
 		}
 	}
