@@ -339,16 +339,17 @@ char* getHistory(char *cmd){
 	int index = atoi(cmd);
 	
 	// Handle any errors
-	if (index == 0) {
+	if (index == 0 && (strcmp(cmd, "0") != 0) && (strcmp(cmd, "-0") != 0)) {
 		fprintf(stderr, "Error: invalid input after '!'\n");
-	} else if (index > historyCounter || index < (0 - historyCounter)) {
+	} else if (index > historyCounter || index < (1 - historyCounter)) {
 		fprintf(stderr, "Error: number out of range\n");
 
 	// Otherwise, return appropriate value
 	} else if (index > 0 && index <= historyCounter) {
 		return historyMap[index - 1];
-	} else if (index < 0 && index > (0 - historyCounter - 1)) {
-		return historyMap[historyCounter + index];
+
+	} else if (index <= 0 && index > (0 - historyCounter)) {
+		return historyMap[historyCounter + index - 1];
 	}
 	
 	// Return null if error occurred
@@ -376,8 +377,9 @@ void loadHistory(char* path) {
 
 	FILE *loadHist = fopen(path, "r");
 
+	printf("Loading history from %s\n", path);
 	if(loadHist == NULL){
-		printError("Error loading history", path, true);
+		fprintf(stderr, "%s\n", strerror(errno));
 		return;
 	}
 
@@ -412,7 +414,10 @@ int main(int argc, char *argv[]) {
 	printf("Current Working Directory: %s\n\n", cwd);
 	
 	// Load history from file
-	char* historyPath = strcat(getenv("HOME"), HIST_FILE);
+	char str[MAX_PATH_LEN] = "";
+	strcpy(str, getenv("HOME"));
+	
+	char* historyPath = strcat(str, HIST_FILE);
 	loadHistory(historyPath);
 
 	// Loop until getString() returns "exit"
@@ -435,7 +440,7 @@ int main(int argc, char *argv[]) {
 			}
 		}
 	}
-	
+
 	// Save history to file
 	storeHistory(historyPath);
 
