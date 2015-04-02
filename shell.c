@@ -10,25 +10,40 @@
 #define MAX_CMD_LEN 512
 #define MAX_CMD_TOKENS 50
 #define MAX_PATH_LEN 512
-#define NUM_CMDS 4
-#define HISTORY_LENGTH 20
+#define HISTORY_LEN 20
+#define ALIAS_LEN 10
+#define NUM_CMDS 6
+#define HIST_FILE "/.hist_list"
 
 
-// Global history array
+typedef struct {
+	char name[MAX_CMD_LEN];
+	char cmd[MAX_CMD_LEN];
+} alias_map_t;
 
-static char historyMap[HISTORY_LENGTH][MAX_CMD_LEN];
+// Global arrays for history and alias maps
+static char historyMap[HISTORY_LEN][MAX_CMD_LEN];
+static alias_map_t aliasMap[ALIAS_LEN];
+static int aliasCounter = 0;
 static int historyCounter = 0;
 
 
-
-
-// Helper function for consistent error reporting
+// Helper functions
 void printError(char* err, char* src, bool sysErr) {
 	if (sysErr) {
 		fprintf(stderr, "%s - \"%s\": %s\n", err, src, strerror(errno));
 		
 	} else {
 		fprintf(stderr, "%s - \"%s\"\n", err, src);
+	}
+}
+
+void printAliasList() {
+	int i = 0;
+	for(i = 0; i < (ALIAS_LEN); i++){
+		if(strlen(aliasMap[i].name) != 0){
+			printf("%s: %s\n", aliasMap[i].name, aliasMap[i].cmd);
+		}
 	}
 }
 
@@ -87,13 +102,13 @@ void changedirFn(char *cmd[]) {
 	}
 }
 
-void printHistory(char *cmd[]) {
+void printHistoryFn(char *cmd[]) {
 	if (cmd[1] != NULL) {
 		printError("Error: Unexpected parameter", cmd[1], false);
 
 	} else {
 		int i;
-		for(i = 0; i < (HISTORY_LENGTH); i++){
+		for(i = 0; i < (HISTORY_LEN); i++){
 			if(historyMap[i][0] != 0){
 				printf("%d: %s\n", (i + 1), historyMap[i]);
 			}
@@ -101,6 +116,80 @@ void printHistory(char *cmd[]) {
 	}
 }
 
+void addAliasFn(char *cmd[]) {
+	if (cmd[2] != NULL) {
+		// Convert command array back into a string, removing "alias <name>"
+		char str[MAX_CMD_LEN];
+		strcpy(str, cmd[2]);
+
+		int j = 3;
+		while (cmd[j] != NULL){
+			strcat(str, " ");
+			strcat(str, cmd[j]);
+			j++;
+		}
+
+		// Search for alias
+		int i = 0;
+		while (i < aliasCounter && strcmp(aliasMap[i].name, cmd[1]) != 0){
+			i++;
+		}
+
+		// If alias exists already, replace it
+		if (i < aliasCounter) {
+			strcpy(aliasMap[i].cmd, str);
+			printf("Alias replaced\n"); 
+
+		// If another alias can be added, add it
+		} else if (aliasCounter < ALIAS_LEN) {
+			strcpy(aliasMap[aliasCounter].name, cmd[1]);			
+			strcpy(aliasMap[aliasCounter].cmd, str);
+			printf("Alias created\n"); 
+
+			aliasCounter++;
+
+		// Print error message
+		} else {
+			fprintf(stderr, "Error: alias limit reached\n");
+		}
+
+	} else if (cmd[1] != NULL) {
+		fprintf(stderr, "Error: parameter expected\n");
+
+	} else {
+		printAliasList();
+	}
+}
+
+void removeAliasFn(char *cmd[]) {
+	if (cmd[2] != NULL) {
+		fprintf(stderr, "Error: unexpected parameter\n");
+
+	} else if (cmd[1] == NULL) {
+		fprintf(stderr, "Error: parameter expected\n");
+
+	} else {
+		// Search for alias
+		int i = 0;
+		while (i < aliasCounter && strcmp(aliasMap[i].name, cmd[1]) != 0){
+			i++;
+		}
+		
+		// If alias exists
+		if (i < aliasCounter) {
+			
+			// Move all aliases after the target to the previous index
+			for ( ; i < ALIAS_LEN; i++){
+				strcpy(aliasMap[i].name, aliasMap[i + 1].name);
+				strcpy(aliasMap[i].cmd, aliasMap[i + 1].cmd);
+			}
+			
+			aliasCounter--;
+		} else {
+			fprintf(stderr, "Error: alias not found\n");
+		}
+	}
+}
 
 // Array mapping names to function pointers for above functions
 typedef struct {
@@ -112,7 +201,9 @@ cmd_map_t commandMap [] = {
 	{"getpath", &getpathFn},
 	{"setpath", &setpathFn},
 	{"cd", &changedirFn},
-	{"history", &printHistory}
+	{"history", &printHistoryFn},
+	{"alias", &addAliasFn},
+	{"unalias", &removeAliasFn}
 };
 
 char* getString() {
@@ -179,45 +270,62 @@ void runExternalCommand(char *cmd[]){
 }
 
 void runCommand(char *input){
-	char** cmd;
-	
-	int i; // Counter for the command map searcher
-    int n; // C0unter for the token printer
-	
-	cmd = getTokens(input);
+	char** cmd = getTokens(input);
 
 	// Print list of tokens, to ensure everything works
-	n = 0;
+	int n = 0;
 	while(cmd[n] != NULL){
 		printf("Command token %d: '%s'\n", n, cmd[n]);
 		n++;
 	}
+	
+	//Search the alias map for entered command
+	for (int i = 0; i < aliasCounter; i++) {
+		if (strcmp(aliasMap[i].name, cmd[0]) == 0) {
+			printf("\nAlias found: %s - \"%s\"\n\n", cmd[0], aliasMap[i].cmd);
 
-	// Search the command map for the index of the entered command
-	i = 0;
-	while (i < NUM_CMDS && strcmp(commandMap[i].name, cmd[0]) != 0){
-		i++;
+			// Add any additional arguments
+			char str[MAX_CMD_LEN];
+			strcpy(str, aliasMap[i].cmd);
+
+			int arg = 1;
+			while (cmd[arg] != NULL){
+				strcat(str, " ");
+				strcat(str, cmd[arg]);
+				arg++;
+			}
+			
+			runCommand(str);
+			return;
+		}
 	}
 	
-	// If i < NUM_CMDS, internal cmd found, otherwise, run external cmd
-	if (i < NUM_CMDS){
-		(*commandMap[i].function)(cmd);
-	} else {
-		runExternalCommand(cmd);
+	// Search the command map for the index of the entered command
+	for (int i = 0; i < NUM_CMDS; i++) {
+		if (strcmp(commandMap[i].name, cmd[0]) == 0) {
+			(*commandMap[i].function)(cmd);
+			return;
+		}
 	}
+
+	// If command entered is not internal command or alias
+	runExternalCommand(cmd);
 }
 
 void addHistory(char *cmd){
-	if (historyCounter < HISTORY_LENGTH){
+	// If there's still room to add more commands to history
+	if (historyCounter < HISTORY_LEN){
 		strcpy(historyMap[historyCounter], cmd);
 		historyCounter++;
 
+	// Otherwise, history is already full
 	} else {
-		int i;
-		for (i = 0; i < HISTORY_LENGTH; i++){
+		// Move all commands to the previous index
+		for (int i = 0; i < HISTORY_LEN; i++){
 			strcpy(historyMap[i], historyMap[i + 1]);	
 		}
 		
+		// Add new command to end of the array
 		strcpy(historyMap[19], cmd);
 	}
 }
@@ -246,6 +354,47 @@ char* getHistory(char *cmd){
 	return NULL;
 }
 
+void storeHistory(char* path) {
+	// Original home directory is stored in homeDir
+	FILE *storeHist = fopen(path, "w");
+
+	if(storeHist == NULL) {
+		printError("Error saving history", path, true);
+		return;
+	}
+
+	for (int i = 0; i < HISTORY_LEN; i++) {
+		fprintf(storeHist, "%s\n", historyMap[i]);
+	}
+
+	fclose(storeHist);
+}
+
+void loadHistory(char* path) {
+	char lineBuffer[MAX_CMD_LEN];
+
+	FILE *loadHist = fopen(path, "r");
+
+	if(loadHist == NULL){
+		printError("Error loading history", path, true);
+		return;
+	}
+
+	for (int i = 0; i < HISTORY_LEN; i++) {
+		// Load current line into temporary buffer
+		fgets(lineBuffer, MAX_CMD_LEN, (FILE*) loadHist);
+
+		// If not newline, there's a command there
+		if(strcmp(lineBuffer, "\n") != 0){
+			// Strip the newline for insertion into array
+			lineBuffer[strlen(lineBuffer)-1] = '\0';
+			addHistory(lineBuffer);
+		}
+	}
+
+	fclose(loadHist);
+}
+
 int main(int argc, char *argv[]) {
 	char* input; // String before parsing into tokens
 
@@ -260,6 +409,10 @@ int main(int argc, char *argv[]) {
 
 	printf("Stored PATH: %s\n\n", path);
 	printf("Current Working Directory: %s\n\n", cwd);
+	
+	// Load history from file
+	char* historyPath = strcat(getenv("HOME"), HIST_FILE);
+	loadHistory(historyPath);
 
 	// Loop until getString() returns "exit"
 	while(strcmp((input = getString()), "exit") != 0) {
@@ -281,6 +434,9 @@ int main(int argc, char *argv[]) {
 			}
 		}
 	}
+	
+	// Save history to file
+	storeHistory(historyPath);
 
 	// Restore the PATH variable
 	setenv("PATH", path, 1);
