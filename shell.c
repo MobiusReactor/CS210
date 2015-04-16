@@ -24,7 +24,9 @@ typedef struct {
 // Global arrays for history and alias maps
 static char historyMap[HISTORY_LEN][MAX_CMD_LEN];
 static alias_map_t aliasMap[ALIAS_LEN];
-static int aliasCounter = 0;
+static char usedAliases[ALIAS_LEN][MAX_CMD_LEN];
+static int numSubstitutions = 0;
+static int numAliases = 0;
 static int historyCounter = 0;
 
 
@@ -40,7 +42,7 @@ void printError(char* err, char* src, bool sysErr) {
 
 void printAliasList() {
 	int i = 0;
-	for(i = 0; i < (aliasCounter); i++){
+	for(i = 0; i < (numAliases); i++){
 		// if(strlen(aliasMap[i].name) != 0){
 		if(aliasMap[i].name[0] != 0){
 			printf("%s: %s\n", aliasMap[i].name, aliasMap[i].cmd);
@@ -132,22 +134,22 @@ void addAliasFn(char *cmd[]) {
 
 		// Search for alias
 		int i = 0;
-		while (i < aliasCounter && strcmp(aliasMap[i].name, cmd[1]) != 0){
+		while (i < numAliases && strcmp(aliasMap[i].name, cmd[1]) != 0){
 			i++;
 		}
 
 		// If alias exists already, replace it
-		if (i < aliasCounter) {
+		if (i < numAliases) {
 			strcpy(aliasMap[i].cmd, str);
 			printf("Alias replaced\n"); 
 
 		// If another alias can be added, add it
-		} else if (aliasCounter < ALIAS_LEN) {
-			strcpy(aliasMap[aliasCounter].name, cmd[1]);			
-			strcpy(aliasMap[aliasCounter].cmd, str);
+		} else if (numAliases < ALIAS_LEN) {
+			strcpy(aliasMap[numAliases].name, cmd[1]);			
+			strcpy(aliasMap[numAliases].cmd, str);
 			printf("Alias created\n"); 
 
-			aliasCounter++;
+			numAliases++;
 
 		// Print error message
 		} else {
@@ -172,12 +174,12 @@ void removeAliasFn(char *cmd[]) {
 	} else {
 		// Search for alias
 		int i = 0;
-		while (i < aliasCounter && strcmp(aliasMap[i].name, cmd[1]) != 0){
+		while (i < numAliases && strcmp(aliasMap[i].name, cmd[1]) != 0){
 			i++;
 		}
 		
 		// If alias exists
-		if (i < aliasCounter) {
+		if (i < numAliases) {
 			
 			// Move all aliases after the target to the previous index
 			for ( ; i < ALIAS_LEN; i++){
@@ -185,7 +187,7 @@ void removeAliasFn(char *cmd[]) {
 				strcpy(aliasMap[i].cmd, aliasMap[i + 1].cmd);
 			}
 			
-			aliasCounter--;
+			numAliases--;
 		} else {
 			fprintf(stderr, "Error: alias not found\n");
 		}
@@ -268,49 +270,6 @@ void runExternalCommand(char *cmd[]){
 	} else if (pid > 0) {
 		wait(NULL);
 	}
-}
-
-void runCommand(char *input){
-	char** cmd = getTokens(input);
-
-	// Print list of tokens, to ensure everything works
-	int n = 0;
-	while(cmd[n] != NULL){
-		printf("Command token %d: '%s'\n", n, cmd[n]);
-		n++;
-	}
-	
-	//Search the alias map for entered command
-	for (int i = 0; i < aliasCounter; i++) {
-		if (strcmp(aliasMap[i].name, cmd[0]) == 0) {
-			printf("\nAlias found: %s - \"%s\"\n\n", cmd[0], aliasMap[i].cmd);
-
-			// Add any additional arguments
-			char str[MAX_CMD_LEN];
-			strcpy(str, aliasMap[i].cmd);
-
-			int arg = 1;
-			while (cmd[arg] != NULL){
-				strcat(str, " ");
-				strcat(str, cmd[arg]);
-				arg++;
-			}
-			
-			runCommand(str);
-			return;
-		}
-	}
-	
-	// Search the command map for the index of the entered command
-	for (int i = 0; i < NUM_CMDS; i++) {
-		if (strcmp(commandMap[i].name, cmd[0]) == 0) {
-			(*commandMap[i].function)(cmd);
-			return;
-		}
-	}
-
-	// If command entered is not internal command or alias
-	runExternalCommand(cmd);
 }
 
 void addHistory(char *cmd){
@@ -398,6 +357,86 @@ void loadHistory(char* path) {
 	fclose(loadHist);
 }
 
+void runCommand(char *input){
+	char** cmd = getTokens(input);
+
+	// Print list of tokens, to ensure everything works
+	int n = 0;
+	while(cmd[n] != NULL){
+		printf("Command token %d: '%s'\n", n, cmd[n]);
+		n++;
+	}
+	
+	// Check if command is history invocation
+	if(input[0] == '!'){
+		input = getHistory(input);
+		
+		if (input != NULL) {
+			// Add any additional arguments
+			char str[MAX_CMD_LEN];
+			strcpy(str, input);
+
+			int arg = 1;
+			while (cmd[arg] != NULL){
+				strcat(str, " ");
+				strcat(str, cmd[arg]);
+				arg++;
+			}
+			
+			printf("<Running command from history - \"%s\">\n", input);
+			runCommand(str);
+		}
+		return;
+	}
+	
+	//Search the alias map for entered command
+	for (int i = 0; i < numAliases; i++) {
+		if (strcmp(aliasMap[i].name, cmd[0]) == 0) {
+			for (int j = 0; j < numSubstitutions; j++) {
+				if (strcmp(usedAliases[j], cmd[0]) == 0) {
+					fprintf(stderr, "Alias loop detected - abort\n");
+					return;
+				}
+			}
+			
+			printf("\nAlias found: %s - \"%s\"\n\n", cmd[0], aliasMap[i].cmd);
+			
+			strcpy(usedAliases[numSubstitutions], cmd[0]);
+			numSubstitutions++;
+			
+			printf("Used aliases:\n");
+			for (int j = 0; j < numSubstitutions; j++) {
+				printf("<%s>  \n", usedAliases[j]);
+			}
+
+			// Add any additional arguments
+			char str[MAX_CMD_LEN];
+			strcpy(str, aliasMap[i].cmd);
+
+			int arg = 1;
+			while (cmd[arg] != NULL){
+				strcat(str, " ");
+				strcat(str, cmd[arg]);
+				arg++;
+			}
+			
+			runCommand(str);
+			return;
+		}
+	}
+	
+	// Search the command map for the index of the entered command
+	for (int i = 0; i < NUM_CMDS; i++) {
+		if (strcmp(commandMap[i].name, cmd[0]) == 0) {
+			(*commandMap[i].function)(cmd);
+			return;
+		}
+	}
+
+	// If command entered is not internal command or alias
+	runExternalCommand(cmd);
+}
+
 int main(int argc, char *argv[]) {
 	char* input; // String before parsing into tokens
 
@@ -427,18 +466,15 @@ int main(int argc, char *argv[]) {
 		if (input[0] != 0){
 			
 			// Check if it's a history command
-			if(input[0] == '!'){
-				input = getHistory(input);
-				
-				if (input != NULL) {
-					printf("<Running command from history - \"%s\">\n", input);
-					runCommand(input);
-				}
-			} else {
+			if(input[0] != '!'){
 				addHistory(input);
-				runCommand(input);
 			}
+			
+			runCommand(input);
 		}
+		
+		memset(usedAliases, 0, sizeof(usedAliases));
+		numSubstitutions = 0;
 	}
 
 	// Save history to file
