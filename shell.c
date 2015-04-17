@@ -246,7 +246,7 @@ char** getTokens(char* str) {
 
 	// Add null pointer to end of array
 	tokens[++i] = NULL;
-
+	
 	return tokens;
 }
 
@@ -273,9 +273,6 @@ void runExternalCommand(char *cmd[]){
 }
 
 void addHistory(char *cmd){
-	int i;
-
-
 	// If there's still room to add more commands to history
 	if (historyCounter < HISTORY_LEN){
 		strcpy(historyMap[historyCounter], cmd);
@@ -284,7 +281,7 @@ void addHistory(char *cmd){
 	// Otherwise, history is already full
 	} else {
 		// Move all commands to the previous index
-		for (i = 0; i < HISTORY_LEN; i++){
+		for (int i = 0; i < HISTORY_LEN; i++){
 			strcpy(historyMap[i], historyMap[i + 1]);	
 		}
 		
@@ -321,14 +318,13 @@ char* getHistory(char *cmd){
 void storeHistory(char* path) {
 	// Original home directory is stored in homeDir
 	FILE *storeHist = fopen(path, "w");
-	int i;
 
 	if(storeHist == NULL) {
 		printError("Error saving history", path, true);
 		return;
 	}
 
-	for (i = 0; i < HISTORY_LEN; i++) {
+	for (int i = 0; i < HISTORY_LEN; i++) {
 		fprintf(storeHist, "%s\n", historyMap[i]);
 	}
 
@@ -339,7 +335,6 @@ void loadHistory(char* path) {
 	char lineBuffer[MAX_CMD_LEN];
 
 	FILE *loadHist = fopen(path, "r");
-	int i;
 
 	printf("Loading history from %s\n", path);
 	if(loadHist == NULL){
@@ -347,7 +342,7 @@ void loadHistory(char* path) {
 		return;
 	}
 
-	for (i = 0; i < HISTORY_LEN; i++) {
+	for (int i = 0; i < HISTORY_LEN; i++) {
 		// Load current line into temporary buffer
 		fgets(lineBuffer, MAX_CMD_LEN, (FILE*) loadHist);
 
@@ -364,8 +359,12 @@ void loadHistory(char* path) {
 
 void runCommand(char *input){
 	char** cmd = getTokens(input);
-	int i, j;
-
+	
+	// If no command was entered, abort
+	if (cmd[0] == NULL) {
+		return;
+	}
+	
 	// Print list of tokens, to ensure everything works
 	int n = 0;
 	while(cmd[n] != NULL){
@@ -396,9 +395,9 @@ void runCommand(char *input){
 	}
 	
 	//Search the alias map for entered command
-	for (i = 0; i < numAliases; i++) {
+	for (int i = 0; i < numAliases; i++) {
 		if (strcmp(aliasMap[i].name, cmd[0]) == 0) {
-			for (j = 0; j < numSubstitutions; j++) {
+			for (int j = 0; j < numSubstitutions; j++) {
 				if (strcmp(usedAliases[j], cmd[0]) == 0) {
 					fprintf(stderr, "Alias loop detected - abort\n");
 					return;
@@ -411,7 +410,7 @@ void runCommand(char *input){
 			numSubstitutions++;
 			
 			printf("Used aliases:\n");
-			for (j = 0; j < numSubstitutions; j++) {
+			for (int j = 0; j < numSubstitutions; j++) {
 				printf("<%s>  \n", usedAliases[j]);
 			}
 
@@ -432,7 +431,7 @@ void runCommand(char *input){
 	}
 	
 	// Search the command map for the index of the entered command
-	for (i = 0; i < NUM_CMDS; i++) {
+	for (int i = 0; i < NUM_CMDS; i++) {
 		if (strcmp(commandMap[i].name, cmd[0]) == 0) {
 			(*commandMap[i].function)(cmd);
 			return;
