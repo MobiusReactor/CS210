@@ -1,9 +1,2 @@
-# CS210-shell
-
-Github repo for the Simple Shell exercise for CS210.
-
-# Compilation Instructions
-
-<s>Compile using gcc with the <b>-pedantic -Wall -std=gnu11</b> flags for the best results.</s>
-
-With the latest version, the changes mean that the <b>-std=gnu11</b> flag is no longer needed to avoid warnings
+# NOTICE (17/07/18):
+### This project has been archived on GitHub due to a migration to [GitLab](https://gitlab.mobiusreactor.com/). Any future changes to this project will be found [here](https://gitlab.mobiusreactor.com/University/CS210).
